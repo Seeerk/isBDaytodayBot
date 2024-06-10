@@ -1,9 +1,7 @@
 import os
 import logging
-import random
 import datetime
 import schedule
-import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
