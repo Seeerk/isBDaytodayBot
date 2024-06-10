@@ -1,13 +1,13 @@
 import os
+import logging
 import random
+import datetime
 import schedule
 import time
-import logging
-from datetime import datetime
-from telegram import Bot, Update
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -19,69 +19,51 @@ logger = logging.getLogger(__name__)
 # Загрузите переменные окружения из .env файла
 load_dotenv()
 
-# Получите токен вашего бота из переменных окружения
+# Получите токен вашего бота и ID чата из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+CHANNEL_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-bot = Bot(token=TOKEN)
+# Создайте объект приложения
+application = Application.builder().token(TOKEN).build()
 
+async def start(update: Update, context: CallbackContext):
+    """Отправляет сообщение 'Привет!' при вызове команды /start"""
+    await update.message.reply_text("Привет!")
 
-def send_message(text):
-    try:
-        bot.send_message(chat_id=CHAT_ID, text=text)
-        logger.info(f"Sent message: {text}")
-    except Exception as e:
-        logger.error(f"Error sending message: {e}")
+async def send_test_message(update: Update, context: CallbackContext):
+    """Отправляет сообщение 'test' при вызове команды /test"""
+    await update.message.reply_text("test")
 
+async def daily_post():
+    """Отправляет сообщение каждый день в случайное время"""
+    now = datetime.datetime.now()
+    text = "Да" if now.month == 6 and now.day == 1 else "Нет"
+    await application.bot.send_message(chat_id=CHANNEL_ID, text=text)
 
-def schedule_daily_message():
-    # Определяем случайное время для сообщения
-    hour = random.randint(0, 23)
-    minute = random.randint(0, 59)
-    schedule_time = f"{hour:02d}:{minute:02d}"
+def schedule_daily_post():
+    """Планирует ежедневный пост"""
+    schedule.every().day.at("10:00").do(asyncio.run, daily_post())
 
-    # Определяем сообщение
-    message = "Да" if datetime.now().month == 6 and datetime.now().day == 1 else "Нет"
-
-    # Планируем отправку сообщения
-    schedule.every().day.at(schedule_time).do(send_message, text=message)
-
-    logger.info(f"Scheduled message '{message}' at {schedule_time}")
-
-
-def run_scheduler():
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-
-def send_test_message(update: Update, context: CallbackContext):
-    test_message = "Это тестовое сообщение"
-    update.message.reply_text(test_message)
-    logger.info("Sent test message")
-
-
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Привет!")
-
+async def test_post(update: Update, context: CallbackContext):
+    """Публикует запись в канал (тестовая запись) и отменяет запланированный ежедневный пост на 1 день"""
+    now = datetime.datetime.now()
+    text = "Да" if now.month == 6 and now.day == 1 else "Нет"
+    await context.bot.send_message(chat_id=CHANNEL_ID, text=text)
+    schedule.clear("daily_post")  # Отменяем запланированный пост только на один день
 
 def main():
-    updater = Updater(TOKEN)
-    dp = updater.dispatcher
-
     # Добавление обработчика команды /start
-    dp.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start))
 
-    # Добавление кнопки "Тест"
-    dp.add_handler(CommandHandler("test", send_test_message))
+    # Добавление обработчика команды /test
+    application.add_handler(CommandHandler("test", test_post))
 
-    updater.start_polling()
+    # Планирование ежедневного поста
+    schedule_daily_post()
+
+    # Запускаем бота
+    application.run_polling()
     logger.info("Bot started polling")
 
-    updater.idle()
-
-
 if __name__ == "__main__":
-    logger.info("Bot started")
-    schedule_daily_message()
-    run_scheduler()
+    main()
