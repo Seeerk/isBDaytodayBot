@@ -57,14 +57,27 @@ async def make_daily_post():
         logger.info("Ежедневный пост успешно отправлен")
         await notify_admin(
             f"Ежедневный пост, запланированный на {now.strftime('%Y-%m-%d %H:%M:%S')}, успешно отправлен.")
+        # Запланировать пост на следующий день
+        schedule_next_post()
     except Exception as e:
         await log_and_notify_error(e, "Ошибка при отправке ежедневного поста")
+
+
+def schedule_next_post():
+    tomorrow = datetime.datetime.now() + datetime.timedelta(days=1)
+    random_hour = random.randint(0, 23)
+    random_minute = random.randint(0, 59)
+    scheduler.add_job(make_daily_post,
+                      CronTrigger(year=tomorrow.year, month=tomorrow.month, day=tomorrow.day, hour=random_hour,
+                                  minute=random_minute))
+    logger.info(
+        f"Запланирован ежедневный пост на {tomorrow.strftime('%Y-%m-%d')} в {random_hour:02}:{random_minute:02}")
 
 
 def schedule_daily_post():
     now = datetime.datetime.now()
     random_hour = random.randint(now.hour, 23)
-    random_minute = random.randint(0, 59) if random_hour > now.hour else random.randint(now.minute, 59)
+    random_minute = random.randint(now.minute + 1, 59) if random_hour == now.hour else random.randint(0, 59)
     scheduler.add_job(make_daily_post,
                       CronTrigger(year=now.year, month=now.month, day=now.day, hour=random_hour, minute=random_minute))
     logger.info(f"Запланирован ежедневный пост на {now.strftime('%Y-%m-%d')} в {random_hour:02}:{random_minute:02}")
@@ -74,22 +87,15 @@ def reschedule_post_to_tomorrow():
     now = datetime.datetime.now()
     today = now.strftime('%Y-%m-%d')
 
-    # canceling today post if job exist
+    # Отменяем запланированный пост на сегодня, если он существует
     for job in scheduler.get_jobs():
         if job.next_run_time.strftime('%Y-%m-%d') == today:
             scheduler.remove_job(job.id)
             logger.info("Отменен текущий запланированный пост на сегодня")
             break
 
-    # re-schedule post to tomorrow
-    tomorrow = now + datetime.timedelta(days=1)
-    random_hour = random.randint(0, 23)
-    random_minute = random.randint(0, 59)
-    scheduler.add_job(make_daily_post,
-                      CronTrigger(year=tomorrow.year, month=tomorrow.month, day=tomorrow.day, hour=random_hour,
-                                  minute=random_minute))
-    logger.info(
-        f"Запланирован ежедневный пост на {tomorrow.strftime('%Y-%m-%d')} в {random_hour:02}:{random_minute:02}")
+    # Планируем пост на завтра
+    schedule_next_post()
 
 
 async def make_test_post(update: Update, context: CallbackContext):
