@@ -38,16 +38,13 @@ else:
 application = Application.builder().token(TOKEN).build()
 scheduler = AsyncIOScheduler()
 
-
 async def start(update: Update, context: CallbackContext):
     logger.info("Получена команда /start")
     await update.message.reply_text("Привет! \n каждый день я сообщаю сегодня ли у Дениса день рождения")
 
-
 async def send_test_message(update: Update, context: CallbackContext):
     logger.info("Получена команда /test")
     await update.message.reply_text("test")
-
 
 async def make_daily_post():
     now = datetime.datetime.now()
@@ -62,7 +59,6 @@ async def make_daily_post():
     except Exception as e:
         await log_and_notify_error(e, "Ошибка при отправке ежедневного поста")
 
-
 def schedule_next_post():
     tomorrow = datetime.datetime.now() + datetime.timedelta(days=1)
     random_hour = random.randint(0, 23)
@@ -73,15 +69,21 @@ def schedule_next_post():
     logger.info(
         f"Запланирован ежедневный пост на {tomorrow.strftime('%Y-%m-%d')} в {random_hour:02}:{random_minute:02}")
 
-
 def schedule_daily_post():
     now = datetime.datetime.now()
+    today = now.strftime('%Y-%m-%d')
+
+    # Проверяем, есть ли уже запланированный пост на сегодня
+    for job in scheduler.get_jobs():
+        if job.next_run_time.strftime('%Y-%m-%d') == today:
+            logger.info("Ежедневный пост уже запланирован на сегодня")
+            return
+
     random_hour = random.randint(now.hour, 23)
     random_minute = random.randint(now.minute + 1, 59) if random_hour == now.hour else random.randint(0, 59)
     scheduler.add_job(make_daily_post,
                       CronTrigger(year=now.year, month=now.month, day=now.day, hour=random_hour, minute=random_minute))
     logger.info(f"Запланирован ежедневный пост на {now.strftime('%Y-%m-%d')} в {random_hour:02}:{random_minute:02}")
-
 
 def reschedule_post_to_tomorrow():
     now = datetime.datetime.now()
@@ -97,7 +99,6 @@ def reschedule_post_to_tomorrow():
     # Планируем пост на завтра
     schedule_next_post()
 
-
 async def make_test_post(update: Update, context: CallbackContext):
     reschedule_post_to_tomorrow()
 
@@ -109,7 +110,6 @@ async def make_test_post(update: Update, context: CallbackContext):
         await notify_admin(f"Тестовый пост успешно отправлен в {now.strftime('%Y-%m-%d %H:%M:%S')}.")
     except Exception as e:
         await log_and_notify_error(e, "Ошибка при отправке тестового поста")
-
 
 async def test_bot(update: Update, context: CallbackContext):
     if scheduler.get_jobs():
@@ -125,7 +125,6 @@ async def test_bot(update: Update, context: CallbackContext):
     except Exception as e:
         await log_and_notify_error(e, "Ошибка при отправке сообщения 'Да, живой я'")
 
-
 async def notify_admin(message):
     admin_chat_id = os.getenv('ADMIN_CHAT_ID', CHANNEL_ID)
     try:
@@ -134,13 +133,11 @@ async def notify_admin(message):
     except Exception as e:
         await log_and_notify_error(e, "Ошибка при отправке уведомления администратору")
 
-
 async def log_and_notify_error(exception, context):
     logger.error(f"{context}: {exception}")
     traceback_str = traceback.format_exc()  # Получаем трассировку стека в виде строки
     logger.error(f"Traceback:\n{traceback_str}")  # Записываем трассировку в лог
     await notify_admin(f"{context}: {exception}")
-
 
 def main():
     try:
@@ -165,7 +162,6 @@ def main():
             logger.info("Бот завершил работу")
         except Exception as e:
             asyncio.run(log_and_notify_error(e, "Ошибка при завершении работы бота"))
-
 
 if __name__ == "__main__":
     main()
